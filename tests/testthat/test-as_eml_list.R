@@ -1,9 +1,10 @@
 test_that("`as_eml_list()` works for class `tbl_lp` imported from md", {
-  x <- system.file("extdata", 
+  file <- system.file("extdata", 
                    "bionet_metadata.Rmd",
                    package = "delma") |>
-    read_lp() |>
-    as_eml_list()
+    read_lp()
+  expect_warning(as_eml_list(file), "Duplicate heading")
+  x <- as_eml_list(file) |> suppressWarnings()
   inherits(x, "list") |>
     expect_true()
 })
@@ -13,7 +14,8 @@ test_that("`as_eml_list()` works for class `tbl_df` imported from md", {
                    "bionet_metadata.Rmd",
                    package = "delma") |>
     read_md()
-  result <- as_eml_list(x)
+  result <- as_eml_list(x) |> suppressWarnings()
+  expect_warning(as_eml_list(x))
   inherits(result, "list") |>
     expect_true()
   # note: conversion to tibble reduces depth by one
@@ -41,11 +43,12 @@ test_that("`as_eml_list()` works for class `tbl_df` imported from xml", {
 })
 
 test_that("`as_eml_list()` works for class `list`", {
-  x <- system.file("extdata", 
+  file <- system.file("extdata", 
                    "bionet_metadata.Rmd",
                    package = "delma") |>
-    read_md() |>
-    as_eml_list()
+    read_md()
+  x <- as_eml_list(file) |> suppressWarnings()
+  expect_warning(as_eml_list(file))
   y <- as_eml_list(x)
   inherits(y, "list") |>
     expect_true()
@@ -60,4 +63,33 @@ test_that("`as_eml_list()` works for class `xml_document", {
     as_eml_list()
   inherits(x, "list") |>
     expect_true()
+})
+
+test_that("`as_eml_list()` adds <para> tags for long text passages", {
+  x <- system.file("extdata", 
+                   "bionet_metadata.Rmd",
+                   package = "delma") |>
+    read_md()
+  
+  x_list <- x |> 
+    as_eml_list() |>
+    suppressWarnings() # quiet expected warning from duplicate citetitle
+
+  # 3 labels hold text with n_char > 60 (which triggers para tags)
+  # organizationName, citation, abstract
+  # it's a bit fiddly to get this exact answer, but you can see it using:
+  # x |> 
+  # tidyr::unnest(cols = "text") |>
+  # dplyr::mutate(chr_count = nchar(text)) |>
+  # dplyr::filter(chr_count > 60)
+  
+  # find headings in list and make sure each is followed by a para tag
+  abstract <- x_list |>
+    purrr::pluck(1, 1, "abstract")
+  org_name <- x_list |>
+    purrr::pluck(1, 1, "creator", "organizationName")
+  citation <- x_list |>
+    purrr::pluck(1, 2, 1, 1, "citation")
+  
+  expect_equal(names(abstract), "para")
 })
